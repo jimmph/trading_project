@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.trading.domain.OrderStatus;
 import com.trading.domain.OrderType;
+import com.trading.model.Asset;
 import com.trading.model.Coin;
 import com.trading.model.Order;
 import com.trading.model.OrderItem;
@@ -21,12 +22,14 @@ public class OrderServiceImpl implements OrderService{
     private final OrderRepository orderRepository;
     private final WalletService walletService;
     private final OrderItemRepository orderItemRepository;
+    private final AssetService assetService;
 
 
-    public OrderServiceImpl(final OrderRepository orderRepository, final WalletService walletService, final OrderItemRepository orderItemRepository){
+    public OrderServiceImpl(final OrderRepository orderRepository, final WalletService walletService, final OrderItemRepository orderItemRepository, final AssetService assetService){
         this.orderRepository = orderRepository;
         this.walletService = walletService;
         this.orderItemRepository = orderItemRepository;
+        this.assetService = assetService;
     }
 
     @Override
@@ -85,6 +88,14 @@ public class OrderServiceImpl implements OrderService{
 
         //create asset
 
+        Asset oldAsset = assetService.findAssetByUserIdAndCoinId(user.getId(), coin.getId());
+
+        if(oldAsset==null){
+            assetService.createAsset(user, coin, quantity);
+        }
+        else{
+            assetService.updateAsset(oldAsset.getId(), quantity);  
+        }
         return orderSaved;
     }
 
@@ -96,27 +107,34 @@ public class OrderServiceImpl implements OrderService{
         }
         double sellPrice = coin.getCurrentPrice();
 
-        double buyPrice = assetToSell.getPrice();
+        Asset assetToSell = assetService.findAssetByUserIdAndCoinId(user.getId(), coin.getId());
 
-        OrderItem orderItem = createOrderItem(coin, quantity, buyPrice, sellPrice);
+        double buyPrice = assetToSell.getBuyPrice();
 
-        Order order = createOrder(user, orderItem, OrderType.SELL);
-        orderItem.setOrder(order);
-        Order orderSaved = orderRepository.save(order);
-
-        if(assetToSell.getQuantity()>= quantity){
-            order.setStatus(OrderStatus.SUCCESS);
-            walletService.payOrderPayment(order, user);
-
-            Asset updatedAsset = assetService.updateAsset(assetToSell.getId(), -quantity);
-
-            if(updatedAsset.getQuantity()*coin.getCurrentPrice()<=1){
-                assetService.deleteAsset(updatedAsset.getId);
-            }
-            return orderSaved;
-        }
-        throw new Exception("Insufficient quantity to sell");
+        if(assetToSell!=null){
+            OrderItem orderItem = createOrderItem(coin, quantity, buyPrice, sellPrice);
+            
         
+            Order order = createOrder(user, orderItem, OrderType.SELL);
+            orderItem.setOrder(order);
+
+            if(assetToSell.getQuantity()>= quantity){
+                order.setStatus(OrderStatus.SUCCESS);
+                order.setOrderType(OrderType.SELL);
+                Order savedOrder = orderRepository.save(order);
+                walletService.payOrderPayment(order, user);
+
+                Asset updatedAsset = assetService.updateAsset(assetToSell.getId(), -quantity);
+
+                if(updatedAsset.getQuantity()*coin.getCurrentPrice()<=1){
+                    assetService.deleteAsset(updatedAsset.getId());
+                }
+                return savedOrder;
+            }
+            throw new Exception("Insufficient quantity to sell");
+    
+        }
+        throw new Exception("asset not found");
     }
 
     @Override

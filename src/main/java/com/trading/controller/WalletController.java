@@ -38,7 +38,7 @@ public class WalletController {
     public ResponseEntity<Wallet> getUserWallet(@RequestHeader("Authorization") String jwt) throws Exception{
         User user = userService.findUserProfileByJwt(jwt);
         Wallet wallet = walletService.getUserWallet(user);
-        return new ResponseEntity<>(wallet, HttpStatus.ACCEPTED);
+        return ResponseEntity.ok(wallet);
     }
 
     @PutMapping("/{walletId}/transfer")
@@ -49,9 +49,9 @@ public class WalletController {
         throws Exception{
         User userSender = userService.findUserProfileByJwt(jwt);
         Wallet receiverWallet = walletService.getUserWallet(userSender);
-        Wallet wallet = walletService.walletToWalletTransfer(userSender, receiverWallet, req.getAmount());
+        Wallet receiverWalletDone = walletService.walletToWalletTransfer(userSender, receiverWallet, req.getAmount());
         
-        return new ResponseEntity<>(wallet, HttpStatus.ACCEPTED);
+        return ResponseEntity.ok(receiverWalletDone);
     }
 
     @PutMapping("/order/{orderId}/pay")
@@ -61,8 +61,8 @@ public class WalletController {
         throws Exception{
         User userSender = userService.findUserProfileByJwt(jwt);
         Order order = orderService.getOrderById(orderId);
-        Wallet wallet = walletService.payOrderPayment(order, userSender);
+        Wallet walletReceiver = walletService.payOrderPayment(order, userSender);
         
-        return new ResponseEntity<>(wallet, HttpStatus.ACCEPTED);
+        return ResponseEntity.ok(walletReceiver);
     }
 }
